@@ -1,28 +1,16 @@
 import java.lang.ref.SoftReference;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.DelayQueue;
 
-public  class Cache<K,V>  implements ICache<K,V>{
+public class IntCache extends Cache<Integer,Integer>{
+	private Average average;
 
-	@SuppressWarnings("rawtypes")
-	protected final DelayQueue<CacheObject> cleaningUpQueue=new DelayQueue<>();
-	protected final ConcurrentHashMap<K,SoftReference<V>> map=new ConcurrentHashMap<>(); 
-	protected final Long PERIOD_IN_MILS;
-	protected List<ICacheEntriesWriter> writerList;
-	protected  Double average;
-	protected Thread cleanerThread;
-
-	public Cache(TimePeriodUnit unit,int timePeriod,List<ICacheEntriesWriter> writers) {
-		this.writerList=writers;
-		PERIOD_IN_MILS=unit.value*timePeriod;
-		runCleaningThread();
-		
+	public IntCache(TimePeriodUnit unit,int timePeriod,List<ICacheEntriesWriter> writers) {
+		super(unit,timePeriod,writers);
+		average=new Average();
 	}
-
 	@Override
-	public void put(K key, V value) {
+	public void put(Integer key, Integer value) {
 		if (key == null) {
 			return;
 		}
@@ -30,39 +18,41 @@ public  class Cache<K,V>  implements ICache<K,V>{
 			map.remove(key);
 		} else {
 			long expiryTime = System.currentTimeMillis() + PERIOD_IN_MILS;
-			SoftReference<V> reference = new SoftReference<>(value);
+			SoftReference<Integer> reference = new SoftReference<>(value);
+			boolean isPresent=false;
+			long diff=0;
+			isPresent=null!=map.get(key);
+			if(isPresent) {
+				diff=value-map.get(key).get();
+			}
+			
 			map.put(key, reference);
+		if(isPresent) {
+			average.updateValue(diff, 0);
+		} else {
+			average.updateValue(value, 1);
+		}
 			cleaningUpQueue.put(new CacheObject(key, reference, expiryTime));
+			
+			
 		}
 	}
 
+	
 	@Override
-	public void remove(K key) {
-		map.remove(key);
-		
-	}
-
-	@Override
-	public V get(K key) {
-		CacheObject obj=cleaningUpQueue.peek();
+	public Integer get(Integer key) {
+		CacheObject<Integer,Integer> obj=cleaningUpQueue.peek();
 		if(obj!=null && obj.getExpiryTime()<System.currentTimeMillis() && obj.getKey().equals(key)) 
 		{	
 			map.remove(key);
-			publishExpiredEntries(obj);
-			return null;
+			boolean isChanged=cleaningUpQueue.remove(obj);
+			if(isChanged) {
+				average.updateValue(-obj.getReference().get(), 2);
+				publishExpiredEntries(obj);	
+			}
+		return null;
 		}	
 		return Optional.ofNullable(map.get(key)).map(SoftReference::get).orElse(null);
-		
-	}
-
-	@Override
-	public void clear() {
-		map.clear();
-	}
-
-	@Override
-	public long size() {
-		return map.size();
 	}
 
 	private void publishExpiredEntries(CacheObject obj) {
@@ -75,17 +65,20 @@ public  class Cache<K,V>  implements ICache<K,V>{
 		}	
 	}
 
-	
+
 	public  void runCleaningThread() {
 		if(null==cleanerThread ||!cleanerThread.isAlive()) {
 			cleanerThread = new Thread(() -> {
 				while (!Thread.currentThread().isInterrupted()) {
 					try {
 						@SuppressWarnings("unchecked")
-						CacheObject<K,V> delayedCacheObject = (CacheObject<K,V>)cleaningUpQueue.take();
+						CacheObject<Integer,Integer> delayedCacheObject = (CacheObject<Integer,Integer>)cleaningUpQueue.take();
 						map.remove(delayedCacheObject.getKey(), delayedCacheObject.getReference());
+						average.updateValue(-delayedCacheObject.getReference().get(), 2);
+						
 						publishExpiredEntries(delayedCacheObject);
-						System.out.println("Object Removed "+delayedCacheObject);
+						
+						
 					} catch (InterruptedException e) {
 						Thread.currentThread().interrupt();
 						System.out.println("Cleaning thread has been interupted! please restart it again by calling runCleaningThread()");
@@ -98,13 +91,9 @@ public  class Cache<K,V>  implements ICache<K,V>{
 			System.out.println("Thread is already running");
 		}
 	}
-
-
-
-
-
-
-
-
+public double getAverage() {
+	return average.getAverage();
+}
+	
 
 }

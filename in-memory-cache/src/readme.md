@@ -16,6 +16,17 @@ Cache -> implementation of ICache.
  7. Average function is not available as this is a generic Map that can take on any values and manage 	them, custom objects that are being inserted needs to implement toString(),equals() and hashcode() 	method in order to work properly.
  8. a public method is provided which can be used to restart cleaning thread if it stops by any chance, so that removal of keys that are expired can be ensured without actually restarting the cache again.
  
+ 9. Created a child class that takes only Integer values to demonstrate average() of all the the non expired entries in a map . (Test case is in Test3.java )
+ 
  HOW TO RUN? 
-  Just run the application from DriverClass or Test1 or Test2 class,
+  Just run the application from DriverClass or Test1 or Test2 or Test3 class,
   Values of expirey Time can be set through Cache constructor, you need to give time period and unit(using enum TimePeriodUnit) and a writer class that writes to file is already created that can be used.
+  
+  Note:
+  Test3 class tests the average value returned by the cache at any instant of time.
+  
+To make the operation atomic, I have created a custom class which maintains sum of all the  values
+of non expired key in the cache and length of the map, the method used in updating the variables 
+of the class are synchronized at object level, so any thread that access that Custom objects method 
+method while calling put or remove method of the cache, it first updates the cache then calls this method, in this way threads are not blocked while accessing the map inside the cache and can update the sum and length value of the custom object in atomic manner.
+ 
