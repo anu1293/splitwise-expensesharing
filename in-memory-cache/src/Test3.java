@@ -13,6 +13,8 @@ import java.util.List;
 public class Test3 {
 	public static void main(String[] args) {
 
+		
+		
 		List<ICacheEntriesWriter> writers=new ArrayList<>();
 		writers.add(new ExpiredEntriesFileWriter("expired.txt"));
 
